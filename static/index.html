@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>manga-assist</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<style>
+  :root { --bg:#14161a; --panel:#1d2026; --line:#2c313a; --fg:#e6e8ec; --mut:#8b93a1; --acc:#6aa5ff; --ok:#5ec27a; --warn:#e0a458; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui,sans-serif; }
+  header { display:flex; gap:12px; align-items:center; padding:10px 16px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0 8px 0 0; }
+  button, select, input, textarea { font:inherit; color:var(--fg); background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+  button { cursor:pointer; } button:hover { border-color:var(--acc); }
+  button.primary { background:var(--acc); color:#08111f; border-color:var(--acc); }
+  textarea { width:100%; resize:vertical; min-height:56px; }
+  main { display:grid; grid-template-columns: minmax(0,1.2fr) minmax(360px,1fr); height:calc(100vh - 53px); }
+  .viewer { overflow:auto; padding:16px; border-right:1px solid var(--line); }
+  .stage { position:relative; display:inline-block; user-select:none; cursor:crosshair; }
+  .stage img { display:block; max-width:100%; height:auto; }
+  .box { position:absolute; border:2px solid var(--acc); background:rgba(106,165,255,.12); }
+  .box.sel { border-color:var(--ok); background:rgba(94,194,122,.18); }
+  .box span { position:absolute; top:-1px; left:-1px; background:var(--acc); color:#08111f; font-size:11px; padding:0 5px; border-radius:0 0 4px 0; }
+  .box.sel span { background:var(--ok); }
+  .side { overflow:auto; padding:12px 16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px; margin-bottom:12px; }
+  .card.sel { border-color:var(--ok); }
+  .row { display:flex; gap:8px; align-items:center; margin:6px 0; }
+  label.l { color:var(--mut); font-size:12px; display:block; margin-top:8px; }
+  .ja { font-size:18px; }
+  .flag { color:var(--warn); font-size:13px; }
+  .mut { color:var(--mut); font-size:12px; }
+  details summary { cursor:pointer; color:var(--mut); }
+  .hint { color:var(--mut); padding:24px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>manga-assist</h1>
+    <input v-model="proj.title" placeholder="Series / chapter title" @change="save" style="width:240px">
+    <select v-model="current">
+      <option v-for="(b, name) in proj.pages" :key="name" :value="name">{{ name }}</option>
+    </select>
+    <label class="mut">Add page <input type="file" accept="image/*" multiple @change="upload"></label>
+    <span style="flex:1"></span>
+    <button @click="exportScript">Export script</button>
+  </header>
+
+  <main>
+    <section class="viewer">
+      <div v-if="!current" class="hint">Add a page image to start. Drag on the page to draw a box around each bubble.</div>
+      <div v-else class="stage" ref="stage"
+           @mousedown="startDraw" @mousemove="moveDraw" @mouseup="endDraw" @mouseleave="endDraw">
+        <img :src="'/api/pages/' + encodeURIComponent(current)" ref="img" @load="onImg" draggable="false">
+        <div v-for="(b, i) in boxes" :key="b.id" class="box" :class="{sel: b.id === sel}"
+             :style="boxStyle(b)" @mousedown.stop="sel = b.id"><span>{{ i + 1 }}</span></div>
+        <div v-if="drawing" class="box" :style="boxStyle(drawing, true)"></div>
+      </div>
+    </section>
+
+    <section class="side">
+      <details class="card">
+        <summary>Series context &amp; glossary</summary>
+        <label class="l">Context (characters, tone, setting)</label>
+        <textarea v-model="proj.context" @change="save" placeholder="e.g. School comedy. X is a blunt, deadpan class rep. Casual speech."></textarea>
+        <label class="l">Glossary</label>
+        <div v-for="(g, i) in proj.glossary" :key="i" class="row">
+          <input v-model="g.ja" placeholder="JA" style="width:30%" @change="save">
+          <input v-model="g.en" placeholder="EN" style="width:30%" @change="save">
+          <input v-model="g.note" placeholder="note" style="flex:1" @change="save">
+          <button @click="proj.glossary.splice(i,1); save()">×</button>
+        </div>
+        <button @click="proj.glossary.push({ja:'',en:'',note:''})">+ term</button>
+      </details>
+
+      <div v-if="current && !boxes.length" class="hint">Drag on the page to add a bubble.</div>
+
+      <div v-for="(b, i) in boxes" :key="b.id" class="card" :class="{sel: b.id === sel}" @click="sel = b.id">
+        <div class="row">
+          <strong>#{{ i + 1 }}</strong>
+          <button @click.stop="runOcr(b)" :disabled="b.busy">OCR</button>
+          <button class="primary" @click.stop="runDraft(b)" :disabled="b.busy || !b.ja">
+            {{ b.busy ? '…' : 'Draft / check' }}
+          </button>
+          <span style="flex:1"></span>
+          <button @click.stop="removeBox(b)">Delete</button>
+        </div>
+
+        <label class="l">Japanese (editable if OCR is off)</label>
+        <textarea class="ja" v-model="b.ja" @change="save"></textarea>
+
+        <label class="l">Your draft</label>
+        <textarea v-model="b.draft" @change="save" placeholder="Write your own translation, then hit Draft / check"></textarea>
+
+        <template v-if="b.suggestion || b.literal">
+          <label class="l">Suggested</label>
+          <div>{{ b.suggestion }}
+            <button @click.stop="b.final = b.suggestion; save()">Use</button>
+            <button @click.stop="b.draft = b.suggestion; save()">Copy to draft</button>
+          </div>
+          <details><summary>Literal gloss &amp; notes</summary>
+            <div class="mut">Literal: {{ b.literal }}</div>
+            <div class="mut" v-if="b.notes">Notes: {{ b.notes }}</div>
+          </details>
+          <div v-for="f in (b.flags || [])" class="flag">⚑ {{ f }}</div>
+        </template>
+
+        <label class="l">Final</label>
+        <textarea v-model="b.final" @change="save" placeholder="Leave blank to export draft → suggestion"></textarea>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const { createApp, reactive, ref, computed, onMounted } = Vue;
+
+createApp({
+  setup() {
+    const proj = reactive({ title: '', context: '', glossary: [], pages: {} });
+    const current = ref('');
+    const sel = ref('');
+    const drawing = ref(null);
+    const scale = ref(1); // natural px per displayed px
+    const img = ref(null);
+    const stage = ref(null);
+    let start = null;
+
+    const boxes = computed(() => (current.value ? proj.pages[current.value] || [] : []));
+
+    async function load() {
+      const r = await fetch('/api/project');
+      const p = await r.json();
+      Object.assign(proj, p);
+      const names = Object.keys(proj.pages);
+      if (names.length && !current.value) current.value = names[0];
+    }
+
+    let saveTimer;
+    function save() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        const payload = JSON.parse(JSON.stringify(proj, (k, v) => (k === 'busy' ? undefined : v)));
+        fetch('/api/project', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      }, 250);
+    }
+
+    async function upload(e) {
+      for (const f of e.target.files) {
+        const fd = new FormData(); fd.append('file', f);
+        const r = await fetch('/api/pages', { method: 'POST', body: fd });
+        if (r.ok) { const { name } = await r.json(); proj.pages[name] = proj.pages[name] || []; current.value = name; }
+      }
+      e.target.value = '';
+      save();
+    }
+
+    function onImg() { scale.value = img.value.naturalWidth / img.value.clientWidth; }
+    window.addEventListener('resize', () => img.value && onImg());
+
+    // boxes are stored in pixels; shown in display pixels
+    function boxStyle(b, isDisplay) {
+      const s = isDisplay ? 1 : 1 / scale.value;
+      return { left: b.x * s + 'px', top: b.y * s + 'px', width: b.w * s + 'px', height: b.h * s + 'px' };
+    }
+    function pos(e) {
+      const r = stage.value.getBoundingClientRect();
+      return { x: Math.max(0, Math.min(e.clientX - r.left, r.width)), y: Math.max(0, Math.min(e.clientY - r.top, r.height)) };
+    }
+    function startDraw(e) { start = pos(e); drawing.value = { x: start.x, y: start.y, w: 0, h: 0 }; }
+    function moveDraw(e) {
+      if (!start) return;
+      const p = pos(e);
+      drawing.value = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) };
+    }
+    async function endDraw() {
+      if (!start) return;
+      const d = drawing.value; start = null; drawing.value = null;
+      if (!d || d.w < 12 || d.h < 12) return;
+      const s = scale.value;
+      const b = reactive({ id: Math.random().toString(36).slice(2, 9), x: d.x * s, y: d.y * s, w: d.w * s, h: d.h * s,
+        ja: '', draft: '', suggestion: '', literal: '', notes: '', flags: [], final: '' });
+      proj.pages[current.value].push(b);
+      sel.value = b.id;
+      await runOcr(b);
+    }
+
+    async function runOcr(b) {
+      b.busy = true;
+      try {
+        const r = await fetch('/api/ocr', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ page: current.value, x: b.x, y: b.y, w: b.w, h: b.h }) });
+        if (r.ok) b.ja = (await r.json()).ja; else alert('OCR failed: ' + (await r.text()));
+      } finally { b.busy = false; save(); }
+    }
+
+    async function runDraft(b) {
+      b.busy = true;
+      try {
+        const list = boxes.value;
+        const i = list.indexOf(b);
+        const neighbors = list.slice(Math.max(0, i - 3), i + 3).filter(n => n !== b && n.ja).map(n => n.ja);
+        const r = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ja: b.ja, draft: b.draft, context: proj.context, glossary: proj.glossary, neighbors }) });
+        if (!r.ok) { alert('Draft failed: ' + (await r.text())); return; }
+        const d = await r.json();
+        b.suggestion = d.suggestion || ''; b.literal = d.literal || ''; b.notes = d.notes || ''; b.flags = d.flags || [];
+      } finally { b.busy = false; save(); }
+    }
+
+    function removeBox(b) {
+      const list = proj.pages[current.value];
+      list.splice(list.indexOf(b), 1); save();
+    }
+
+    async function exportScript() {
+      await fetch('/api/project', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(JSON.parse(JSON.stringify(proj, (k, v) => (k === 'busy' ? undefined : v)))) });
+      const t = await (await fetch('/api/export')).text();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([t], { type: 'text/markdown' }));
+      a.download = (proj.title || 'script') + '.md'; a.click();
+    }
+
+    onMounted(load);
+    return { proj, current, sel, drawing, boxes, img, stage, onImg, boxStyle, startDraw, moveDraw, endDraw,
+      runOcr, runDraft, removeBox, upload, save, exportScript };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
