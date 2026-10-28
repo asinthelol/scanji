@@ -10,13 +10,14 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 def export_script():
     proj = load_project()
     lines = [f"# {proj.get('title') or 'Translation script'}", ""]
-    for page in sorted(proj["pages"]):
-        boxes = proj["pages"][page]
-        if not boxes:
+    for page, boxes in proj["pages"].items():  # already in natural order
+        
+        # Removed line indexing bc TyperTools in Photoshop doesn't ignore them.
+        texts = [b.get("final") or b.get("draft") or b.get("suggestion") or "" for b in boxes]
+        texts = [t.strip() for t in texts if t.strip()]
+        if not texts:
             continue
         lines.append(f"## {page}")
-        for i, b in enumerate(boxes, 1):
-            en = b.get("final") or b.get("draft") or b.get("suggestion") or ""
-            lines.append(f"{i}. {en}")
+        lines.extend(texts)
         lines.append("")
     return "\n".join(lines)
