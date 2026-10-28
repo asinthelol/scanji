@@ -28,11 +28,20 @@ export function PageViewer({ page, boxes, selectedId, onSelect, onCreate }: Prop
   const [drawing, setDrawing] = useState<Rect | null>(null)
   const origin = useRef<{ x: number; y: number } | null>(null)
 
+  /*
+   * Measures the user's selection area scale from the image element itself.
+   * The page viewer cahched its scale before images finished loading, resulting
+   * in a scale of 0.
+  */ 
+  const measure = () => {
+    const el = img.current
+    return el && el.naturalWidth && el.clientWidth ? el.naturalWidth / el.clientWidth : 0
+  }
+
   useEffect(() => {
     const el = img.current
     if (!el) return
-    const measure = () => el.clientWidth && setScale(el.naturalWidth / el.clientWidth)
-    const observer = new ResizeObserver(measure)
+    const observer = new ResizeObserver(() => setScale(measure() || 1))
     observer.observe(el)
     return () => observer.disconnect()
   }, [page])
@@ -46,6 +55,7 @@ export function PageViewer({ page, boxes, selectedId, onSelect, onCreate }: Prop
   }
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (!measure()) return // image not loaded yet; a box would collapse to zero size
     e.currentTarget.setPointerCapture(e.pointerId)
     origin.current = point(e)
     setDrawing({ ...origin.current, w: 0, h: 0 })
@@ -63,8 +73,9 @@ export function PageViewer({ page, boxes, selectedId, onSelect, onCreate }: Prop
     origin.current = null
     setDrawing(null)
     if (!d) return
-    if (d.w >= MIN_BOX_PX && d.h >= MIN_BOX_PX) {
-      onCreate({ x: d.x * scale, y: d.y * scale, w: d.w * scale, h: d.h * scale })
+    const k = measure()
+    if (d.w >= MIN_BOX_PX && d.h >= MIN_BOX_PX && k) {
+      onCreate({ x: d.x * k, y: d.y * k, w: d.w * k, h: d.h * k })
       return
     }
     // A click: select the topmost box under the pointer.
@@ -84,7 +95,7 @@ export function PageViewer({ page, boxes, selectedId, onSelect, onCreate }: Prop
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      <img ref={img} src={pageUrl(page)} alt={page} draggable={false} className="block h-auto max-w-full" />
+      <img ref={img} src={pageUrl(page)} alt={page} draggable={false} onLoad={() => setScale(measure() || 1)} className="block h-auto max-w-full" />
       {boxes.map((b, i) => (
         <div
           key={b.id}
