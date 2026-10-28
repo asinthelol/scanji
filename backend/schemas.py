@@ -12,7 +12,8 @@ class Box(BaseModel):
     draft: str = ""          # User's draft
     suggestion: str = ""     # model's natural-English suggestion
     literal: str = ""        # model's literal gloss
-    notes: str = ""          # model's notes / flags
+    notes: str = ""          # model's notes on nuance and ambiguity
+    flags: list[str] = []    # model's problems found in the user's draft
     final: str = ""
 
 
