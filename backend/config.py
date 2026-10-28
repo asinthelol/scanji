@@ -4,8 +4,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-BASE = Path(__file__).resolve().parent.parent
-load_dotenv(BASE / ".env")
+BACKEND = Path(__file__).resolve().parent
+BASE = BACKEND.parent
+load_dotenv(BACKEND / ".env")
 
 FRONTEND_DIST = BASE / "frontend" / "dist"
 DATA = BASE / "data"
