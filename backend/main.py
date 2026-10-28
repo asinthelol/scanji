@@ -14,11 +14,11 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import FRONTEND_DIST
-from .routers import draft, export, ocr, pages, project
+from .routers import detect, draft, export, ocr, pages, project
 
 app = FastAPI(title="manga-assist")
 
-for module in (project, pages, ocr, draft, export):
+for module in (project, pages, ocr, detect, draft, export):
     app.include_router(module.router)
 
 

@@ -46,3 +46,21 @@ class DraftReq(BaseModel):
     context: str = ""
     glossary: list[dict] = []
     neighbors: list[str] = []  # Japanese text of surrounding bubbles, in reading order
+
+
+class DetectReq(BaseModel):
+    page: str
+    threshold: float = 0.5
+    include_free: bool = False  # also return text outside bubbles (SFX, captions)
+
+
+class OrderBox(BaseModel):
+    id: str
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class OrderReq(BaseModel):
+    boxes: list[OrderBox]
