@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 BASE = Path(__file__).resolve().parent.parent
 load_dotenv(BASE / ".env")
 
-STATIC = BASE / "static"
+FRONTEND_DIST = BASE / "frontend" / "dist"
 DATA = BASE / "data"
 PAGES = DATA / "pages"
 PROJECT_FILE = DATA / "project.json"
