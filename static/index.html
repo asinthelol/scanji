@@ -65,6 +65,11 @@
         <summary>Series context &amp; glossary</summary>
         <label class="l">Context (characters, tone, setting)</label>
         <textarea v-model="proj.context" @change="save" placeholder="e.g. School comedy. X is a blunt, deadpan class rep. Casual speech."></textarea>
+        <label class="l">Export headings ({title} / {page} are replaced; blank = no heading line)</label>
+        <div class="row">
+          <input v-model="proj.export.title_heading" placeholder="# {title}" style="flex:1" @change="save">
+          <input v-model="proj.export.page_heading" placeholder="## {page}" style="flex:1" @change="save">
+        </div>
         <label class="l">Glossary</label>
         <div v-for="(g, i) in proj.glossary" :key="i" class="row">
           <input v-model="g.ja" placeholder="JA" style="width:30%" @change="save">
@@ -119,7 +124,8 @@ const { createApp, reactive, ref, computed, onMounted } = Vue;
 
 createApp({
   setup() {
-    const proj = reactive({ title: '', context: '', glossary: [], pages: {} });
+    const proj = reactive({ title: '', context: '', glossary: [], pages: {},
+      export: { title_heading: '# {title}', page_heading: '## {page}' } });
     const current = ref('');
     const sel = ref('');
     const drawing = ref(null);
@@ -154,6 +160,9 @@ createApp({
         if (r.ok) { const { name } = await r.json(); proj.pages[name] = proj.pages[name] || []; current.value = name; }
       }
       e.target.value = '';
+      // re-apply the server's page order so new pages land in natural order
+      const order = Object.keys((await (await fetch('/api/project')).json()).pages);
+      proj.pages = Object.fromEntries(order.map(k => [k, proj.pages[k] || []]));
       save();
     }
 

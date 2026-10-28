@@ -17,8 +17,16 @@ class Box(BaseModel):
     final: str = ""
 
 
+class ExportSettings(BaseModel):
+    # Heading line templates for the exported script. {title} / {page} are replaced;
+    # an empty template omits that heading line.
+    title_heading: str = "# {title}"
+    page_heading: str = "## {page}"
+
+
 class Project(BaseModel):
     title: str = ""
+    export: ExportSettings = ExportSettings()
     context: str = ""          # series/chapter context: characters, tone, setting
     glossary: list[dict] = []  # [{"ja": "...", "en": "...", "note": "..."}]
     pages: dict[str, list[Box]] = {}
