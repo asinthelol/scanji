@@ -201,7 +201,7 @@ createApp({
       try {
         const list = boxes.value;
         const i = list.indexOf(b);
-        const neighbors = list.slice(Math.max(0, i - 3), i + 3).filter(n => n !== b && n.ja).map(n => n.ja);
+        const neighbors = list.slice(Math.max(0, i - 3), i + 4).filter(n => n !== b && n.ja).map(n => n.ja);
         const r = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ja: b.ja, draft: b.draft, context: proj.context, glossary: proj.glossary, neighbors }) });
         if (!r.ok) { alert('Draft failed: ' + (await r.text())); return; }
