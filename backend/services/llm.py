@@ -48,21 +48,49 @@ def build_prompt(req: DraftReq) -> str:
 
 
 def parse_reply(text: str) -> dict:
-    if text.startswith("```"):
-        text = text.strip("`")
-        text = text[text.find("{"):]
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
+    """
+    Parse the model's JSON reply, tolerating code fences and surrounding prose.
+    """
+    start, end = text.find("{"), text.rfind("}")
+    data = None
+    if start != -1 and end > start:
+        try:
+            data = json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+    if not isinstance(data, dict):
         return {"literal": "", "suggestion": text, "notes": "model returned non-JSON", "flags": []}
+
+    flags = data.get("flags")
+    if isinstance(flags, str):
+        flags = [flags]
+    elif not isinstance(flags, list):
+        flags = []
+    return {
+        "literal": str(data.get("literal") or ""),
+        "suggestion": str(data.get("suggestion") or ""),
+        "notes": str(data.get("notes") or ""),
+        "flags": [str(f) for f in flags if f],
+    }
 
 
 def draft(req: DraftReq) -> dict:
-    msg = get_client().messages.create(
-        model=MODEL,
-        max_tokens=1000,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": build_prompt(req)}],
-    )
+    import anthropic
+
+    try:
+        msg = get_client().messages.create(
+            model=MODEL,
+            max_tokens=1000,
+            system=SYSTEM,
+            messages=[{"role": "user", "content": build_prompt(req)}],
+        )
+    except anthropic.AuthenticationError:
+        raise HTTPException(500, "Anthropic rejected the API key")
+    except anthropic.RateLimitError:
+        raise HTTPException(429, "Anthropic rate limit hit, try again shortly")
+    except anthropic.APIConnectionError:
+        raise HTTPException(502, "Could not reach the Anthropic API")
+    except anthropic.APIStatusError as e:
+        raise HTTPException(502, f"Anthropic API error ({e.status_code})")
     text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
     return parse_reply(text)
