@@ -21,4 +21,5 @@ def load_project() -> dict:
 
 
 def save_project(p: dict) -> None:
+    p["pages"] = {k: p["pages"][k] for k in sorted(p.get("pages", {}), key=natural_key)}
     PROJECT_FILE.write_text(json.dumps(p, ensure_ascii=False, indent=2), encoding="utf-8")
