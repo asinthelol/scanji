@@ -54,6 +54,6 @@ def spa_fallback(path: str):
     """
     Client-side routes (e.g. /p/<id>) must load the app on refresh.
     """
-    if path.startswith("api/"):
+    if path == "api" or path.startswith("api/"):
         raise HTTPException(404)
     return index()
