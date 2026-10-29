@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Toaster } from '@/components/ui/sonner'
 import { useProject } from '@/hooks/useProject'
-import { detectBubbles, draftBubble, exportScript, ocrRegion, readingOrder, uploadPage } from '@/lib/api'
+import { detectBubbles, draftBubble, exportScript, getProject, ocrRegion, readingOrder, uploadPage } from '@/lib/api'
 import { newBox, type Box } from '@/types'
 
 const NEIGHBOR_RADIUS = 3 // bubbles of context sent on each side
@@ -24,7 +24,7 @@ function overlap(a: Pick<Box, 'x' | 'y' | 'w' | 'h'>, b: Pick<Box, 'x' | 'y' | '
 }
 
 export default function App() {
-  const { project, loaded, update, flush, reload } = useProject()
+  const { project, loaded, update, flush } = useProject()
   const [chosenPage, setChosenPage] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [detecting, setDetecting] = useState(false)
@@ -132,9 +132,18 @@ export default function App() {
         toast.error(`${f.name}: ${(err as Error).message}`)
       }
     }
-    await flush() // persist pending edits before the server's page list replaces local state
-    await reload()
-    if (last) setChosenPage(last)
+    try {
+      // The server registered the new pages. Take its page list (and order) but keep local boxes,
+      // so unsaved edits survive and the next save does not overwrite the new pages.
+      const server = await getProject()
+      update((p) => ({
+        ...p,
+        pages: Object.fromEntries(Object.keys(server.pages).map((n) => [n, p.pages[n] ?? server.pages[n]])),
+      }))
+      if (last) setChosenPage(last)
+    } catch (err) {
+      toast.error(`Could not refresh pages: ${(err as Error).message}`)
+    }
   }
 
   const onExport = async () => {
