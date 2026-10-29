@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { BubbleCard } from '@/components/BubbleCard'
@@ -8,15 +9,25 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Toaster } from '@/components/ui/sonner'
 import { useProject } from '@/hooks/useProject'
-import { draftBubble, exportScript, ocrRegion, uploadPage } from '@/lib/api'
+import { detectBubbles, draftBubble, exportScript, ocrRegion, readingOrder, uploadPage } from '@/lib/api'
 import { newBox, type Box } from '@/types'
 
 const NEIGHBOR_RADIUS = 3 // bubbles of context sent on each side
+const DUPLICATE_OVERLAP = 0.3 // detected boxes overlapping an existing one this much are skipped
+
+/** Intersection over union of two boxes. */
+function overlap(a: Pick<Box, 'x' | 'y' | 'w' | 'h'>, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>) {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
+  if (w <= 0 || h <= 0) return 0
+  return (w * h) / (a.w * a.h + b.w * b.h - w * h)
+}
 
 export default function App() {
   const { project, loaded, update, flush, reload } = useProject()
   const [chosenPage, setChosenPage] = useState('')
   const [selectedId, setSelectedId] = useState('')
+  const [detecting, setDetecting] = useState(false)
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
 
   const pageNames = Object.keys(project.pages)
@@ -72,6 +83,39 @@ export default function App() {
     update((p) => ({ ...p, pages: { ...p.pages, [page]: [...(p.pages[page] ?? []), box] } }))
     setSelectedId(box.id)
     runOcr(box)
+  }
+
+  const onDetect = async () => {
+    setDetecting(true)
+    try {
+      const { boxes: found } = await detectBubbles(page)
+      const fresh = found
+        .filter((d) => !boxes.some((b) => overlap(b, d) > DUPLICATE_OVERLAP))
+        .map((d) => newBox(d.x, d.y, d.w, d.h))
+      if (!fresh.length) {
+        toast.info(found.length ? 'No new bubbles; everything detected is already boxed.' : 'No bubbles detected.')
+        return
+      }
+      update((p) => ({ ...p, pages: { ...p.pages, [page]: [...(p.pages[page] ?? []), ...fresh] } }))
+      toast.success(`Added ${fresh.length} bubble${fresh.length > 1 ? 's' : ''}. Running OCR…`)
+      for (const b of fresh) await runOcr(b) // manga-ocr handles one crop at a time
+    } catch (e) {
+      toast.error(`Detection failed: ${(e as Error).message}`)
+    } finally {
+      setDetecting(false)
+    }
+  }
+
+  const onSortOrder = async () => {
+    try {
+      const { ids } = await readingOrder(boxes)
+      update((p) => {
+        const byId = new Map(p.pages[page].map((b) => [b.id, b]))
+        return { ...p, pages: { ...p.pages, [page]: ids.map((id) => byId.get(id)!) } }
+      })
+    } catch (e) {
+      toast.error(`Sorting failed: ${(e as Error).message}`)
+    }
   }
 
   const removeBox = (id: string) =>
@@ -136,6 +180,12 @@ export default function App() {
             Add pages
             <input type="file" accept="image/*" multiple hidden onChange={onUpload} />
           </label>
+        </Button>
+        <Button variant="outline" disabled={!page || detecting} onClick={onDetect}>
+          {detecting && <Loader2 className="animate-spin" />} Detect bubbles
+        </Button>
+        <Button variant="outline" disabled={boxes.length < 2} onClick={onSortOrder} title="Right-to-left, top-to-bottom">
+          Sort order
         </Button>
         <span className="flex-1" />
         <Button onClick={onExport}>Export script</Button>

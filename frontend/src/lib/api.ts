@@ -40,6 +40,23 @@ export function uploadPage(file: File): Promise<{ name: string }> {
 export const ocrRegion = (page: string, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>) =>
   request<{ ja: string }>('/api/ocr', json('POST', { page, x: b.x, y: b.y, w: b.w, h: b.h }))
 
+export interface DetectedBox {
+  x: number
+  y: number
+  w: number
+  h: number
+  kind: string
+  score: number
+}
+
+/** Detect bubble text regions in reading order. */
+export const detectBubbles = (page: string, includeFree = false) =>
+  request<{ boxes: DetectedBox[] }>('/api/detect', json('POST', { page, include_free: includeFree }))
+
+/** Box ids sorted into manga reading order. */
+export const readingOrder = (boxes: Pick<Box, 'id' | 'x' | 'y' | 'w' | 'h'>[]) =>
+  request<{ ids: string[] }>('/api/reading-order', json('POST', { boxes }))
+
 export const draftBubble = (body: {
   ja: string
   draft: string
