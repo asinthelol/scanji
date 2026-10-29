@@ -10,11 +10,11 @@ load_dotenv(BACKEND / ".env")
 
 FRONTEND_DIST = BASE / "frontend" / "dist"
 DATA = BASE / "data"
-PAGES = DATA / "pages"
-PROJECT_FILE = DATA / "project.json"
+PROJECTS = DATA / "projects"  # one folder per project -> project.json + pages/
+LEGACY_PROJECT_FILE = DATA / "project.json"
+LEGACY_PAGES = DATA / "pages"
 
-DATA.mkdir(exist_ok=True)
-PAGES.mkdir(exist_ok=True)
+PROJECTS.mkdir(parents=True, exist_ok=True)
 
 MODEL = os.environ.get("MANGA_ASSIST_MODEL", "claude-sonnet-5-5")
 
