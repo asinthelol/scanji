@@ -33,6 +33,14 @@ export interface Project {
   pages: Record<string, Box[]>
 }
 
+export interface ProjectSummary {
+  id: string
+  title: string
+  pages: number
+  bubbles: number
+  updated: number // unix seconds
+}
+
 export interface DraftResult {
   literal: string
   suggestion: string
