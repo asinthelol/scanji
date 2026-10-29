@@ -5,26 +5,26 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image
 
-from ..config import PAGES
-from ..storage import load_project, save_project
+from ..storage import load_project, pages_dir, save_project
 
-router = APIRouter(prefix="/api/pages", tags=["pages"])
+router = APIRouter(prefix="/api/projects/{pid}/pages", tags=["pages"])
 
 
-def unique_name(name: str) -> str:
+def unique_name(folder: Path, name: str) -> str:
     """
     Avoid overwriting an existing page: page.png -> page-1.png.
     """
     stem, suffix = Path(name).stem, Path(name).suffix
     candidate, n = name, 0
-    while (PAGES / candidate).exists():
+    while (folder / candidate).exists():
         n += 1
         candidate = f"{stem}-{n}{suffix}"
     return candidate
 
 
 @router.post("")
-async def upload_page(file: UploadFile = File(...)):
+async def upload_page(pid: str, file: UploadFile = File(...)):
+    folder = pages_dir(pid)
     name = Path(file.filename or "page.png").name
     raw = await file.read()
 
@@ -34,18 +34,18 @@ async def upload_page(file: UploadFile = File(...)):
     except Exception:
         raise HTTPException(400, "Not a valid image")
 
-    name = unique_name(name)
-    (PAGES / name).write_bytes(raw)
-    proj = load_project()
+    name = unique_name(folder, name)
+    (folder / name).write_bytes(raw)
+    proj = load_project(pid)
     proj["pages"].setdefault(name, [])
-    save_project(proj)
+    save_project(pid, proj)
 
     return {"name": name}
 
 
 @router.get("/{name}")
-def get_page(name: str):
-    path = PAGES / Path(name).name
+def get_page(pid: str, name: str):
+    path = pages_dir(pid) / Path(name).name
     if not path.exists():
         raise HTTPException(404)
     return FileResponse(path)
