@@ -1,4 +1,4 @@
-import type { Box, DraftResult, Project } from '@/types'
+import type { Box, DraftResult, Project, ProjectSummary } from '@/types'
 import { emptyProject } from '@/types'
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -22,23 +22,38 @@ const json = (method: string, body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 })
 
-export const pageUrl = (name: string) => `/api/pages/${encodeURIComponent(name)}`
+const projectUrl = (pid: string) => `/api/projects/${encodeURIComponent(pid)}`
 
-export async function getProject(): Promise<Project> {
+// ---- projects ----
+
+export const listProjects = () => request<ProjectSummary[]>('/api/projects')
+
+export const createProject = (title: string) =>
+  request<{ id: string; title: string }>('/api/projects', json('POST', { title }))
+
+export const deleteProject = (pid: string) => request<{ ok: boolean }>(projectUrl(pid), { method: 'DELETE' })
+
+export async function getProject(pid: string): Promise<Project> {
   // Older project files may lack newer fields, so merge over the defaults.
-  return { ...emptyProject(), ...(await request<Partial<Project>>('/api/project')) }
+  return { ...emptyProject(), ...(await request<Partial<Project>>(projectUrl(pid))) }
 }
 
-export const putProject = (p: Project) => request<{ ok: boolean }>('/api/project', json('PUT', p))
+export const putProject = (pid: string, p: Project) => request<{ ok: boolean }>(projectUrl(pid), json('PUT', p))
 
-export function uploadPage(file: File): Promise<{ name: string }> {
+// ---- pages ----
+
+export const pageUrl = (pid: string, name: string) => `${projectUrl(pid)}/pages/${encodeURIComponent(name)}`
+
+export function uploadPage(pid: string, file: File): Promise<{ name: string }> {
   const fd = new FormData()
   fd.append('file', file)
-  return request('/api/pages', { method: 'POST', body: fd })
+  return request(`${projectUrl(pid)}/pages`, { method: 'POST', body: fd })
 }
 
-export const ocrRegion = (page: string, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>) =>
-  request<{ ja: string }>('/api/ocr', json('POST', { page, x: b.x, y: b.y, w: b.w, h: b.h }))
+// ---- OCR, detection, drafting, export ----
+
+export const ocrRegion = (pid: string, page: string, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>) =>
+  request<{ ja: string }>(`${projectUrl(pid)}/ocr`, json('POST', { page, x: b.x, y: b.y, w: b.w, h: b.h }))
 
 export interface DetectedBox {
   x: number
@@ -50,8 +65,8 @@ export interface DetectedBox {
 }
 
 /** Detect bubble text regions in reading order. */
-export const detectBubbles = (page: string, includeFree = false) =>
-  request<{ boxes: DetectedBox[] }>('/api/detect', json('POST', { page, include_free: includeFree }))
+export const detectBubbles = (pid: string, page: string, includeFree = false) =>
+  request<{ boxes: DetectedBox[] }>(`${projectUrl(pid)}/detect`, json('POST', { page, include_free: includeFree }))
 
 /** Box ids sorted into manga reading order. */
 export const readingOrder = (boxes: Pick<Box, 'id' | 'x' | 'y' | 'w' | 'h'>[]) =>
@@ -65,4 +80,4 @@ export const draftBubble = (body: {
   neighbors: string[]
 }) => request<DraftResult>('/api/draft', json('POST', body))
 
-export const exportScript = () => request<string>('/api/export')
+export const exportScript = (pid: string) => request<string>(`${projectUrl(pid)}/export`)

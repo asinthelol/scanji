@@ -9,16 +9,19 @@ Config (via .env):
 In development run `npm run dev` in frontend (it proxies /api to this server);
 for normal use run `npm run build` and this server serves frontend/dist.
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import FRONTEND_DIST
-from .routers import detect, draft, export, ocr, pages, project
+from .routers import detect, draft, export, ocr, pages, projects
+from .storage import migrate_legacy
+
+migrate_legacy()
 
 app = FastAPI(title="manga-assist")
 
-for module in (project, pages, ocr, detect, draft, export):
+for module in (projects, pages, ocr, detect, draft, export):
     app.include_router(module.router)
 
 
@@ -36,3 +39,13 @@ def index():
 
 if (FRONTEND_DIST / "assets").is_dir():
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+
+
+@app.get("/{path:path}", include_in_schema=False)
+def spa_fallback(path: str):
+    """
+    Client-side routes (e.g. /p/<id>) must load the app on refresh.
+    """
+    if path.startswith("api/"):
+        raise HTTPException(404)
+    return index()

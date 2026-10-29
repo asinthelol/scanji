@@ -64,3 +64,7 @@ class OrderBox(BaseModel):
 
 class OrderReq(BaseModel):
     boxes: list[OrderBox]
+
+
+class ProjectCreate(BaseModel):
+    title: str

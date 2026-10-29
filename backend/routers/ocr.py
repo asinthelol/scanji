@@ -3,16 +3,16 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from PIL import Image
 
-from ..config import PAGES
 from ..schemas import OcrReq
 from ..services.ocr import get_ocr
+from ..storage import pages_dir
 
-router = APIRouter(prefix="/api/ocr", tags=["ocr"])
+router = APIRouter(prefix="/api/projects/{pid}/ocr", tags=["ocr"])
 
 
 @router.post("")
-def ocr_region(req: OcrReq):
-    path = PAGES / Path(req.page).name
+def ocr_region(pid: str, req: OcrReq):
+    path = pages_dir(pid) / Path(req.page).name
     if not path.exists():
         raise HTTPException(404, "page not found")
 

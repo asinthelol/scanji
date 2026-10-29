@@ -4,12 +4,12 @@ from fastapi.responses import PlainTextResponse
 from ..schemas import ExportSettings
 from ..storage import load_project
 
-router = APIRouter(prefix="/api/export", tags=["export"])
+router = APIRouter(prefix="/api/projects/{pid}/export", tags=["export"])
 
 
 @router.get("", response_class=PlainTextResponse)
-def export_script():
-    proj = load_project()
+def export_script(pid: str):
+    proj = load_project(pid)
     settings = ExportSettings(**proj.get("export", {}))
     title = proj.get("title") or "Translation script"
 
