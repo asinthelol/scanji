@@ -62,7 +62,7 @@ export default function Home() {
         <h2 className="mb-4 text-xl font-semibold">Projects</h2>
 
         <form onSubmit={onCreate} className="mb-6 flex gap-2">
-          <Input value={name} placeholder="New project name (e.g. series and chapter)" onChange={(e) => setName(e.target.value)} />
+          <Input value={name} placeholder="New project name (the series)" onChange={(e) => setName(e.target.value)} />
           <Button type="submit" disabled={!name.trim()}>
             <Plus /> Add project
           </Button>
@@ -78,7 +78,7 @@ export default function Home() {
               <Link to={`/p/${p.id}`} className="flex-1 hover:opacity-80">
                 <div className="font-medium">{p.title}</div>
                 <div className="text-muted-foreground text-sm">
-                  {plural(p.pages, 'page')} · {plural(p.bubbles, 'bubble')} · edited{' '}
+                  {plural(p.chapters, 'chapter')} · {plural(p.pages, 'page')} · {plural(p.bubbles, 'bubble')} · edited{' '}
                   {new Date(p.updated * 1000).toLocaleDateString()}
                 </div>
               </Link>
@@ -95,7 +95,7 @@ export default function Home() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete "{pendingDelete?.title}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the project's pages, bubbles, drafts and glossary. It cannot be undone.
+              This permanently deletes the project's chapters, pages, bubbles, drafts and glossary. It cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
