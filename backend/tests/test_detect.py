@@ -68,23 +68,28 @@ def fake_detector(monkeypatch):
     return calls
 
 
-def test_detect_runs_on_the_project_page(client, fake_detector, make_project, upload):
-    pid = make_project()
-    name = upload(pid, "1.png", width=120, height=200)
-    res = client.post(f"/api/projects/{pid}/detect", json={"page": name})
+def detect_url(pid, cid):
+    return f"/api/projects/{pid}/chapters/{cid}/detect"
+
+
+def test_detect_runs_on_the_chapter_page(client, fake_detector, workspace, upload):
+    pid, cid = workspace
+    name = upload(pid, cid, "1.png", width=120, height=200)
+    res = client.post(detect_url(pid, cid), json={"page": name})
     assert res.json()["boxes"][0]["kind"] == "text_bubble"
     assert fake_detector == [{"size": (120, 200), "threshold": 0.5, "include_free": False}]
 
 
-def test_detect_passes_options_through(client, fake_detector, make_project, upload):
-    pid = make_project()
-    name = upload(pid)
-    client.post(f"/api/projects/{pid}/detect", json={"page": name, "threshold": 0.3, "include_free": True})
+def test_detect_passes_options_through(client, fake_detector, workspace, upload):
+    pid, cid = workspace
+    name = upload(pid, cid)
+    client.post(detect_url(pid, cid), json={"page": name, "threshold": 0.3, "include_free": True})
     assert fake_detector[0]["threshold"] == 0.3 and fake_detector[0]["include_free"] is True
 
 
-def test_detect_missing_page_or_project_is_404(client, fake_detector, make_project):
-    pid = make_project()
-    assert client.post(f"/api/projects/{pid}/detect", json={"page": "nope.png"}).status_code == 404
-    assert client.post("/api/projects/nope/detect", json={"page": "1.png"}).status_code == 404
+def test_detect_missing_page_chapter_or_project_is_404(client, fake_detector, workspace):
+    pid, cid = workspace
+    assert client.post(detect_url(pid, cid), json={"page": "nope.png"}).status_code == 404
+    assert client.post(detect_url(pid, "nope"), json={"page": "1.png"}).status_code == 404
+    assert client.post(detect_url("nope", cid), json={"page": "1.png"}).status_code == 404
     assert fake_detector == []

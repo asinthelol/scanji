@@ -25,17 +25,24 @@ export interface ExportSettings {
   page_heading: string
 }
 
+export interface Chapter {
+  id: string
+  title: string
+  pages: Record<string, Box[]>
+}
+
 export interface Project {
   title: string
   export: ExportSettings
-  context: string
-  glossary: GlossaryEntry[]
-  pages: Record<string, Box[]>
+  context: string // shared by all chapters
+  glossary: GlossaryEntry[] // shared by all chapters
+  chapters: Chapter[]
 }
 
 export interface ProjectSummary {
   id: string
   title: string
+  chapters: number
   pages: number
   bubbles: number
   updated: number // unix seconds
@@ -50,10 +57,10 @@ export interface DraftResult {
 
 export const emptyProject = (): Project => ({
   title: '',
-  export: { title_heading: '# {title}', page_heading: '## {page}' },
+  export: { title_heading: '# {title} - {chapter}', page_heading: '## {page}' },
   context: '',
   glossary: [],
-  pages: {},
+  chapters: [],
 })
 
 export const newBox = (x: number, y: number, w: number, h: number): Box => ({

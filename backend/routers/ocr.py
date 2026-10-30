@@ -5,14 +5,14 @@ from PIL import Image
 
 from ..schemas import OcrReq
 from ..services.ocr import get_ocr
-from ..storage import pages_dir
+from ..storage import chapter_dir
 
-router = APIRouter(prefix="/api/projects/{pid}/ocr", tags=["ocr"])
+router = APIRouter(prefix="/api/projects/{pid}/chapters/{cid}/ocr", tags=["ocr"])
 
 
 @router.post("")
-def ocr_region(pid: str, req: OcrReq):
-    path = pages_dir(pid) / Path(req.page).name
+def ocr_region(pid: str, cid: str, req: OcrReq):
+    path = chapter_dir(pid, cid) / Path(req.page).name
     if not path.exists():
         raise HTTPException(404, "page not found")
 

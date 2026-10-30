@@ -1,3 +1,4 @@
+import json
 import os
 
 import pytest
@@ -59,47 +60,44 @@ def test_delete_cannot_remove_anything_outside_projects(client, make_project, da
     assert (data_dir / "precious.txt").exists() and (data_dir / "projects").exists()
 
 
-def test_put_saves_everything_but_the_title(client, make_project):
-    pid = make_project("Original")
+def test_put_saves_everything_but_the_title(client, workspace, set_pages):
+    pid, cid = workspace
     body = client.get(f"/api/projects/{pid}").json()
     body.update(title="HACKED", context="school comedy", glossary=[{"ja": "先輩", "en": "senpai", "note": ""}])
-    body["pages"]["1.png"] = [box(flags=["too literal"], final="Hi")]
     assert client.put(f"/api/projects/{pid}", json=body).status_code == 200
+    set_pages(pid, cid, {"1.png": [box(flags=["too literal"], final="Hi")]})
 
     saved = client.get(f"/api/projects/{pid}").json()
-    assert saved["title"] == "Original"
+    assert saved["title"] == "Test Series"
     assert saved["context"] == "school comedy"
     assert saved["glossary"][0]["en"] == "senpai"
-    assert saved["pages"]["1.png"][0]["flags"] == ["too literal"]  # flags used to be dropped on save
+    assert saved["chapters"][0]["pages"]["1.png"][0]["flags"] == ["too literal"]  # flags used to be dropped on save
 
 
-def test_put_stores_pages_in_natural_order(client, make_project, data_dir):
-    pid = make_project()
-    body = client.get(f"/api/projects/{pid}").json()
-    body["pages"] = {"11.jpg": [], "2.jpg": [], "1.jpg": []}
-    client.put(f"/api/projects/{pid}", json=body)
+def test_put_stores_pages_in_natural_order(client, workspace, set_pages, data_dir):
+    pid, cid = workspace
+    set_pages(pid, cid, {"11.jpg": [], "2.jpg": [], "1.jpg": []})
 
-    assert list(client.get(f"/api/projects/{pid}").json()["pages"]) == ["1.jpg", "2.jpg", "11.jpg"]
+    assert list(client.get(f"/api/projects/{pid}").json()["chapters"][0]["pages"]) == ["1.jpg", "2.jpg", "11.jpg"]
     # also on disk, not only in the API response
-    import json
-
     on_disk = json.loads((data_dir / "projects" / pid / "project.json").read_text(encoding="utf-8"))
-    assert list(on_disk["pages"]) == ["1.jpg", "2.jpg", "11.jpg"]
+    assert list(on_disk["chapters"][0]["pages"]) == ["1.jpg", "2.jpg", "11.jpg"]
 
 
 def test_put_rejects_malformed_body(client, make_project):
     pid = make_project()
-    assert client.put(f"/api/projects/{pid}", json={"pages": {"1.png": [{"id": "x"}]}}).status_code == 422
+    body = {"chapters": [{"id": "c", "pages": {"1.png": [{"id": "x"}]}}]}
+    assert client.put(f"/api/projects/{pid}", json=body).status_code == 422
 
 
-def test_summaries_count_pages_and_bubbles(client, make_project):
+def test_summaries_count_chapters_pages_and_bubbles(client, make_project, make_chapter, set_pages):
     pid = make_project("Counted")
-    body = client.get(f"/api/projects/{pid}").json()
-    body["pages"] = {"1.png": [box("a"), box("b")], "2.png": [box("c")]}
-    client.put(f"/api/projects/{pid}", json=body)
+    one, two = make_chapter(pid, "Chapter 1"), make_chapter(pid, "Chapter 2")
+    set_pages(pid, one, {"1.png": [box("a"), box("b")], "2.png": [box("c")]})
+    set_pages(pid, two, {"1.png": [box("d")]})
 
     (summary,) = client.get("/api/projects").json()
-    assert (summary["id"], summary["pages"], summary["bubbles"]) == (pid, 2, 3)
+    assert (summary["id"], summary["chapters"], summary["pages"], summary["bubbles"]) == (pid, 2, 3, 4)
 
 
 def test_most_recently_edited_project_is_listed_first(client, make_project, data_dir):
@@ -112,20 +110,21 @@ def test_most_recently_edited_project_is_listed_first(client, make_project, data
     assert [p["id"] for p in client.get("/api/projects").json()] == [old, new]
 
 
-def test_delete_removes_project_and_its_files(client, make_project, upload, data_dir):
-    pid = make_project()
-    upload(pid)
+def test_delete_removes_project_and_its_files(client, workspace, upload, data_dir):
+    pid, cid = workspace
+    upload(pid, cid)
     assert client.delete(f"/api/projects/{pid}").status_code == 200
     assert client.get(f"/api/projects/{pid}").status_code == 404
     assert not (data_dir / "projects" / pid).exists()
     assert client.get("/api/projects").json() == []
 
 
-def test_delete_leaves_other_projects_alone(client, make_project, upload):
+def test_delete_leaves_other_projects_alone(client, make_project, make_chapter, upload):
     keep, drop = make_project("Keep"), make_project("Drop")
-    upload(keep)
+    cid = make_chapter(keep)
+    upload(keep, cid)
     client.delete(f"/api/projects/{drop}")
-    assert client.get(f"/api/projects/{keep}/pages/1.png").status_code == 200
+    assert client.get(f"/api/projects/{keep}/chapters/{cid}/pages/1.png").status_code == 200
 
 
 def test_delete_unknown_project_is_404(client):

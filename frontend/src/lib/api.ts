@@ -40,20 +40,31 @@ export async function getProject(pid: string): Promise<Project> {
 
 export const putProject = (pid: string, p: Project) => request<{ ok: boolean }>(projectUrl(pid), json('PUT', p))
 
+// ---- chapters ----
+
+const chapterUrl = (pid: string, cid: string) => `${projectUrl(pid)}/chapters/${encodeURIComponent(cid)}`
+
+export const createChapter = (pid: string, title: string) =>
+  request<{ id: string; title: string }>(`${projectUrl(pid)}/chapters`, json('POST', { title }))
+
+export const deleteChapter = (pid: string, cid: string) =>
+  request<{ ok: boolean }>(chapterUrl(pid, cid), { method: 'DELETE' })
+
 // ---- pages ----
 
-export const pageUrl = (pid: string, name: string) => `${projectUrl(pid)}/pages/${encodeURIComponent(name)}`
+export const pageUrl = (pid: string, cid: string, name: string) =>
+  `${chapterUrl(pid, cid)}/pages/${encodeURIComponent(name)}`
 
-export function uploadPage(pid: string, file: File): Promise<{ name: string }> {
+export function uploadPage(pid: string, cid: string, file: File): Promise<{ name: string }> {
   const fd = new FormData()
   fd.append('file', file)
-  return request(`${projectUrl(pid)}/pages`, { method: 'POST', body: fd })
+  return request(`${chapterUrl(pid, cid)}/pages`, { method: 'POST', body: fd })
 }
 
 // ---- OCR, detection, drafting, export ----
 
-export const ocrRegion = (pid: string, page: string, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>) =>
-  request<{ ja: string }>(`${projectUrl(pid)}/ocr`, json('POST', { page, x: b.x, y: b.y, w: b.w, h: b.h }))
+export const ocrRegion = (pid: string, cid: string, page: string, b: Pick<Box, 'x' | 'y' | 'w' | 'h'>) =>
+  request<{ ja: string }>(`${chapterUrl(pid, cid)}/ocr`, json('POST', { page, x: b.x, y: b.y, w: b.w, h: b.h }))
 
 export interface DetectedBox {
   x: number
@@ -65,8 +76,8 @@ export interface DetectedBox {
 }
 
 /** Detect bubble text regions in reading order. */
-export const detectBubbles = (pid: string, page: string, includeFree = false) =>
-  request<{ boxes: DetectedBox[] }>(`${projectUrl(pid)}/detect`, json('POST', { page, include_free: includeFree }))
+export const detectBubbles = (pid: string, cid: string, page: string, includeFree = false) =>
+  request<{ boxes: DetectedBox[] }>(`${chapterUrl(pid, cid)}/detect`, json('POST', { page, include_free: includeFree }))
 
 /** Box ids sorted into manga reading order. */
 export const readingOrder = (boxes: Pick<Box, 'id' | 'x' | 'y' | 'w' | 'h'>[]) =>
@@ -80,4 +91,4 @@ export const draftBubble = (body: {
   neighbors: string[]
 }) => request<DraftResult>('/api/draft', json('POST', body))
 
-export const exportScript = (pid: string) => request<string>(`${projectUrl(pid)}/export`)
+export const exportScript = (pid: string, cid: string) => request<string>(`${chapterUrl(pid, cid)}/export`)

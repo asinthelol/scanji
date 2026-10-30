@@ -2,7 +2,7 @@ import json
 
 from fastapi import APIRouter, HTTPException
 
-from ..schemas import Project, ProjectCreate
+from ..schemas import Project, TitleReq
 from ..storage import create_project, delete_project, list_projects, load_project, save_project
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -14,7 +14,7 @@ def list_all():
 
 
 @router.post("", status_code=201)
-def create(req: ProjectCreate):
+def create(req: TitleReq):
     title = req.title.strip()
     if not title:
         raise HTTPException(400, "Project name is required")
@@ -29,7 +29,11 @@ def get_project(pid: str):
 @router.put("/{pid}")
 def put_project(pid: str, p: Project):
     data = json.loads(p.model_dump_json())
-    data["title"] = load_project(pid)["title"]  # the name is fixed at creation
+    stored = load_project(pid)
+    data["title"] = stored["title"]  # the name is fixed at creation
+
+    sent = {c["id"]: c for c in data["chapters"]}
+    data["chapters"] = [{**c, "pages": sent[c["id"]]["pages"]} if c["id"] in sent else c for c in stored["chapters"]]
     save_project(pid, data)
     return {"ok": True}
 

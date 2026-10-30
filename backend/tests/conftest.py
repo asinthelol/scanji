@@ -45,17 +45,56 @@ def make_project(client):
 
 
 @pytest.fixture
-def upload(client):
+def make_chapter(client):
     """
-    Upload a generated PNG page to a project and return the stored page name.
+    Create a chapter through the API and return its id.
     """
 
-    def up(pid: str, name: str = "1.png", width: int = 40, height: int = 60) -> str:
-        res = client.post(f"/api/projects/{pid}/pages", files={"file": (name, png_bytes(width, height), "image/png")})
+    def make(pid: str, title: str = "Chapter 1") -> str:
+        res = client.post(f"/api/projects/{pid}/chapters", json={"title": title})
+        assert res.status_code == 201
+        return res.json()["id"]
+
+    return make
+
+
+@pytest.fixture
+def upload(client):
+    """
+    Upload a generated PNG page to a chapter and return the stored page name.
+    """
+
+    def up(pid: str, cid: str, name: str = "1.png", width: int = 40, height: int = 60) -> str:
+        res = client.post(
+            f"/api/projects/{pid}/chapters/{cid}/pages", files={"file": (name, png_bytes(width, height), "image/png")}
+        )
         assert res.status_code == 200
         return res.json()["name"]
 
     return up
+
+
+@pytest.fixture
+def set_pages(client):
+    """
+    Save `pages` (name -> bubbles) as the contents of a chapter.
+    """
+
+    def save(pid: str, cid: str, pages: dict) -> None:
+        body = client.get(f"/api/projects/{pid}").json()
+        next(c for c in body["chapters"] if c["id"] == cid)["pages"] = pages
+        assert client.put(f"/api/projects/{pid}", json=body).status_code == 200
+
+    return save
+
+
+@pytest.fixture
+def workspace(make_project, make_chapter):
+    """
+    A project with one chapter: (project id, chapter id).
+    """
+    pid = make_project()
+    return pid, make_chapter(pid)
 
 
 def box(id: str = "b1", **fields) -> dict:
