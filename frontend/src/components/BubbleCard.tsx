@@ -1,4 +1,6 @@
-import { Flag, Loader2 } from 'lucide-react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Flag, GripVertical, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -21,9 +23,27 @@ interface Props {
 }
 
 export function BubbleCard({ box, index, selected, busy, onSelect, onChange, onOcr, onDraft, onDelete }: Props) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: box.id })
+
   return (
-    <Card className={cn('gap-3 p-3', selected && 'ring-2 ring-green-500')} onClick={onSelect}>
+    <Card
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn('gap-3 p-3', selected && 'ring-2 ring-green-500', isDragging && 'relative z-10 opacity-80 shadow-lg')}
+      onClick={onSelect}
+    >
       <div className="flex items-center gap-2">
+        {/* Click handle to start dragging */}
+        <button
+          ref={setActivatorNodeRef}
+          type="button"
+          aria-label={`Drag bubble ${index + 1} to reorder`}
+          className="text-muted-foreground hover:text-foreground cursor-grab touch-none active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4" />
+        </button>
         <strong>#{index + 1}</strong>
         <Button size="sm" variant="outline" disabled={busy} onClick={onOcr}>
           OCR

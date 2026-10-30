@@ -1,3 +1,13 @@
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -28,6 +38,11 @@ export default function Workspace({ projectId }: { projectId: string }) {
   const [selectedId, setSelectedId] = useState('')
   const [detecting, setDetecting] = useState(false)
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), // a normal click on the handle is not a drag
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const pageNames = Object.keys(project.pages)
   const page = pageNames.includes(chosenPage) ? chosenPage : (pageNames[0] ?? '')
@@ -117,6 +132,16 @@ export default function Workspace({ projectId }: { projectId: string }) {
     }
   }
 
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return
+    update((p) => {
+      const list = p.pages[page]
+      const from = list.findIndex((b) => b.id === active.id)
+      const to = list.findIndex((b) => b.id === over.id)
+      return { ...p, pages: { ...p.pages, [page]: arrayMove(list, from, to) } }
+    })
+  }
+
   const removeBox = (id: string) =>
     update((p) => ({ ...p, pages: { ...p.pages, [page]: p.pages[page].filter((b) => b.id !== id) } }))
 
@@ -204,20 +229,24 @@ export default function Workspace({ projectId }: { projectId: string }) {
         <section className="space-y-3 overflow-auto p-4">
           <ProjectSettings project={project} update={update} />
           {page && !boxes.length && <p className="text-muted-foreground p-6">Drag on the page to add a bubble.</p>}
-          {boxes.map((b, i) => (
-            <BubbleCard
-              key={b.id}
-              box={b}
-              index={i}
-              selected={b.id === selectedId}
-              busy={busy.has(b.id)}
-              onSelect={() => setSelectedId(b.id)}
-              onChange={(patch) => setBox(b.id, patch)}
-              onOcr={() => runOcr(b)}
-              onDraft={() => runDraft(b)}
-              onDelete={() => removeBox(b.id)}
-            />
-          ))}
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={boxes.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+              {boxes.map((b, i) => (
+                <BubbleCard
+                  key={b.id}
+                  box={b}
+                  index={i}
+                  selected={b.id === selectedId}
+                  busy={busy.has(b.id)}
+                  onSelect={() => setSelectedId(b.id)}
+                  onChange={(patch) => setBox(b.id, patch)}
+                  onOcr={() => runOcr(b)}
+                  onDraft={() => runDraft(b)}
+                  onDelete={() => removeBox(b.id)}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </section>
       </main>
     </div>
