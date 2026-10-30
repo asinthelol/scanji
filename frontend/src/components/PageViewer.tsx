@@ -14,6 +14,7 @@ interface Rect {
 
 interface Props {
   projectId: string
+  chapterId: string
   page: string
   boxes: Box[]
   selectedId: string
@@ -22,7 +23,7 @@ interface Props {
 }
 
 /** Page image with draw-to-create bubble boxes. Boxes are stored in natural image pixels. */
-export function PageViewer({ projectId, page, boxes, selectedId, onSelect, onCreate }: Props) {
+export function PageViewer({ projectId, chapterId, page, boxes, selectedId, onSelect, onCreate }: Props) {
   const stage = useRef<HTMLDivElement>(null)
   const img = useRef<HTMLImageElement>(null)
   const [scale, setScale] = useState(1) // natural px per displayed px
@@ -96,7 +97,7 @@ export function PageViewer({ projectId, page, boxes, selectedId, onSelect, onCre
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      <img ref={img} src={pageUrl(projectId, page)} alt={page} draggable={false} onLoad={() => setScale(measure() || 1)} className="block h-auto max-w-full" />
+      <img ref={img} src={pageUrl(projectId, chapterId, page)} alt={page} draggable={false} onLoad={() => setScale(measure() || 1)} className="block h-auto max-w-full" />
       {boxes.map((b, i) => (
         <div
           key={b.id}

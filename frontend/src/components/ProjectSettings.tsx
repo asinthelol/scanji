@@ -34,12 +34,12 @@ export function ProjectSettings({ project, update }: Props) {
 
           <div className="grid gap-1.5">
             <Label className="text-muted-foreground">
-              Export headings ({'{title}'} / {'{page}'} are replaced; blank = no heading line)
+              Export headings ({'{title}'}, {'{chapter}'} and {'{page}'} are replaced; blank = no heading line)
             </Label>
             <div className="flex gap-2">
               <Input
                 value={project.export.title_heading}
-                placeholder="# {title}"
+                placeholder="# {title} - {chapter}"
                 onChange={(e) => update((p) => ({ ...p, export: { ...p.export, title_heading: e.target.value } }))}
               />
               <Input
