@@ -18,18 +18,24 @@ class Box(BaseModel):
 
 
 class ExportSettings(BaseModel):
-    # Heading line templates for the exported script. {title} / {page} are replaced;
-    # an empty template omits that heading line.
-    title_heading: str = "# {title}"
+    # Heading line templates for an exported chapter script. {title} (project), {chapter} and
+    # {page} are replaced; an empty template omits that heading line.
+    title_heading: str = "# {title} - {chapter}"
     page_heading: str = "## {page}"
+
+
+class Chapter(BaseModel):
+    id: str
+    title: str = ""
+    pages: dict[str, list[Box]] = {}
 
 
 class Project(BaseModel):
     title: str = ""
     export: ExportSettings = ExportSettings()
-    context: str = ""          # series/chapter context: characters, tone, setting
+    context: str = ""          # series context shared by all chapters: characters, tone, setting
     glossary: list[dict] = []  # [{"ja": "...", "en": "...", "note": "..."}]
-    pages: dict[str, list[Box]] = {}
+    chapters: list[Chapter] = []
 
 
 class OcrReq(BaseModel):
@@ -66,5 +72,5 @@ class OrderReq(BaseModel):
     boxes: list[OrderBox]
 
 
-class ProjectCreate(BaseModel):
+class TitleReq(BaseModel):
     title: str
