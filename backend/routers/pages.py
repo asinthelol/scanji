@@ -5,9 +5,9 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image
 
-from ..storage import load_project, pages_dir, save_project
+from ..storage import chapter_dir, get_chapter, load_project, save_project
 
-router = APIRouter(prefix="/api/projects/{pid}/pages", tags=["pages"])
+router = APIRouter(prefix="/api/projects/{pid}/chapters/{cid}/pages", tags=["pages"])
 
 
 def unique_name(folder: Path, name: str) -> str:
@@ -23,8 +23,8 @@ def unique_name(folder: Path, name: str) -> str:
 
 
 @router.post("")
-async def upload_page(pid: str, file: UploadFile = File(...)):
-    folder = pages_dir(pid)
+async def upload_page(pid: str, cid: str, file: UploadFile = File(...)):
+    folder = chapter_dir(pid, cid)
     name = Path(file.filename or "page.png").name
     raw = await file.read()
 
@@ -34,18 +34,19 @@ async def upload_page(pid: str, file: UploadFile = File(...)):
     except Exception:
         raise HTTPException(400, "Not a valid image")
 
+    proj = load_project(pid)
+    chapter = get_chapter(proj, cid)
     name = unique_name(folder, name)
     (folder / name).write_bytes(raw)
-    proj = load_project(pid)
-    proj["pages"].setdefault(name, [])
+    chapter["pages"].setdefault(name, [])
     save_project(pid, proj)
 
     return {"name": name}
 
 
 @router.get("/{name}")
-def get_page(pid: str, name: str):
-    path = pages_dir(pid) / Path(name).name
+def get_page(pid: str, cid: str, name: str):
+    path = chapter_dir(pid, cid) / Path(name).name
     if not path.exists():
         raise HTTPException(404)
     return FileResponse(path)

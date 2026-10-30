@@ -6,14 +6,14 @@ from PIL import Image
 from ..schemas import DetectReq, OrderReq
 from ..services.detect import detect_text
 from ..services.reading_order import reading_order
-from ..storage import pages_dir
+from ..storage import chapter_dir
 
 router = APIRouter(prefix="/api", tags=["detect"])
 
 
-@router.post("/projects/{pid}/detect")
-def detect(pid: str, req: DetectReq):
-    path = pages_dir(pid) / Path(req.page).name
+@router.post("/projects/{pid}/chapters/{cid}/detect")
+def detect(pid: str, cid: str, req: DetectReq):
+    path = chapter_dir(pid, cid) / Path(req.page).name
     if not path.exists():
         raise HTTPException(404, "page not found")
     img = Image.open(path).convert("RGB")
