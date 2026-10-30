@@ -13,14 +13,26 @@ import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { BubbleCard } from '@/components/BubbleCard'
+import { ChapterSwitcher } from '@/components/ChapterSwitcher'
 import { PageViewer } from '@/components/PageViewer'
 import { ProjectSettings } from '@/components/ProjectSettings'
 import { Button } from '@/components/ui/button'
 import { Navbar } from '@/components/Navbar'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useProject } from '@/hooks/useProject'
-import { detectBubbles, draftBubble, exportScript, getProject, ocrRegion, readingOrder, uploadPage } from '@/lib/api'
-import { newBox, type Box } from '@/types'
+import {
+  createChapter,
+  deleteChapter,
+  detectBubbles,
+  draftBubble,
+  exportScript,
+  getProject,
+  ocrRegion,
+  readingOrder,
+  uploadPage,
+} from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { newBox, type Box, type Chapter } from '@/types'
 
 const NEIGHBOR_RADIUS = 3 // bubbles of context sent on each side
 const DUPLICATE_OVERLAP = 0.3 // detected boxes overlapping an existing one this much are skipped
@@ -35,6 +47,7 @@ function overlap(a: Pick<Box, 'x' | 'y' | 'w' | 'h'>, b: Pick<Box, 'x' | 'y' | '
 
 export default function Workspace({ projectId }: { projectId: string }) {
   const { project, loaded, update, flush } = useProject(projectId)
+  const [chosenChapter, setChosenChapter] = useState('')
   const [chosenPage, setChosenPage] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [detecting, setDetecting] = useState(false)
@@ -45,15 +58,24 @@ export default function Workspace({ projectId }: { projectId: string }) {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   )
 
-  const pageNames = Object.keys(project.pages)
+  const chapter = project.chapters.find((c) => c.id === chosenChapter) ?? project.chapters[0]
+  const chapterId = chapter?.id ?? ''
+  const pageNames = Object.keys(chapter?.pages ?? {})
   const page = pageNames.includes(chosenPage) ? chosenPage : (pageNames[0] ?? '')
-  const boxes = page ? (project.pages[page] ?? []) : []
+  const boxes = page ? (chapter.pages[page] ?? []) : []
+
+  // Edit the open chapter's pages.
+  const updatePages = (fn: (pages: Chapter['pages']) => Chapter['pages']) =>
+    update((p) => ({ ...p, chapters: p.chapters.map((c) => (c.id === chapterId ? { ...c, pages: fn(c.pages) } : c)) }))
 
   const setBox = (id: string, patch: Partial<Box>) =>
-    update((p) => ({
-      ...p,
-      pages: { ...p.pages, [page]: p.pages[page].map((b) => (b.id === id ? { ...b, ...patch } : b)) },
-    }))
+    updatePages((pages) => ({ ...pages, [page]: pages[page].map((b) => (b.id === id ? { ...b, ...patch } : b)) }))
+
+  const openChapter = (id: string) => {
+    setChosenChapter(id)
+    setChosenPage('')
+    setSelectedId('')
+  }
 
   const withBusy = async (id: string, task: () => Promise<void>) => {
     setBusy((s) => new Set(s).add(id))
@@ -71,7 +93,7 @@ export default function Workspace({ projectId }: { projectId: string }) {
   const runOcr = (b: Pick<Box, 'id' | 'x' | 'y' | 'w' | 'h'>) =>
     withBusy(b.id, async () => {
       try {
-        const { ja } = await ocrRegion(projectId, page, b)
+        const { ja } = await ocrRegion(projectId, chapterId, page, b)
         setBox(b.id, { ja })
       } catch (e) {
         toast.error(`OCR failed: ${(e as Error).message}`)
@@ -95,7 +117,7 @@ export default function Workspace({ projectId }: { projectId: string }) {
 
   const createBox = (r: { x: number; y: number; w: number; h: number }) => {
     const box = newBox(r.x, r.y, r.w, r.h)
-    update((p) => ({ ...p, pages: { ...p.pages, [page]: [...(p.pages[page] ?? []), box] } }))
+    updatePages((pages) => ({ ...pages, [page]: [...(pages[page] ?? []), box] }))
     setSelectedId(box.id)
     runOcr(box)
   }
@@ -103,7 +125,7 @@ export default function Workspace({ projectId }: { projectId: string }) {
   const onDetect = async () => {
     setDetecting(true)
     try {
-      const { boxes: found } = await detectBubbles(projectId, page)
+      const { boxes: found } = await detectBubbles(projectId, chapterId, page)
       const fresh = found
         .filter((d) => !boxes.some((b) => overlap(b, d) > DUPLICATE_OVERLAP))
         .map((d) => newBox(d.x, d.y, d.w, d.h))
@@ -111,7 +133,7 @@ export default function Workspace({ projectId }: { projectId: string }) {
         toast.info(found.length ? 'No new bubbles; everything detected is already boxed.' : 'No bubbles detected.')
         return
       }
-      update((p) => ({ ...p, pages: { ...p.pages, [page]: [...(p.pages[page] ?? []), ...fresh] } }))
+      updatePages((pages) => ({ ...pages, [page]: [...(pages[page] ?? []), ...fresh] }))
       toast.success(`Added ${fresh.length} bubble${fresh.length > 1 ? 's' : ''}. Running OCR…`)
       for (const b of fresh) await runOcr(b) // manga-ocr handles one crop at a time
     } catch (e) {
@@ -124,9 +146,9 @@ export default function Workspace({ projectId }: { projectId: string }) {
   const onSortOrder = async () => {
     try {
       const { ids } = await readingOrder(boxes)
-      update((p) => {
-        const byId = new Map(p.pages[page].map((b) => [b.id, b]))
-        return { ...p, pages: { ...p.pages, [page]: ids.map((id) => byId.get(id)!) } }
+      updatePages((pages) => {
+        const byId = new Map(pages[page].map((b) => [b.id, b]))
+        return { ...pages, [page]: ids.map((id) => byId.get(id)!) }
       })
     } catch (e) {
       toast.error(`Sorting failed: ${(e as Error).message}`)
@@ -135,16 +157,45 @@ export default function Workspace({ projectId }: { projectId: string }) {
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
-    update((p) => {
-      const list = p.pages[page]
+    updatePages((pages) => {
+      const list = pages[page]
       const from = list.findIndex((b) => b.id === active.id)
       const to = list.findIndex((b) => b.id === over.id)
-      return { ...p, pages: { ...p.pages, [page]: arrayMove(list, from, to) } }
+      return { ...pages, [page]: arrayMove(list, from, to) }
     })
   }
 
-  const removeBox = (id: string) =>
-    update((p) => ({ ...p, pages: { ...p.pages, [page]: p.pages[page].filter((b) => b.id !== id) } }))
+  const removeBox = (id: string) => updatePages((pages) => ({ ...pages, [page]: pages[page].filter((b) => b.id !== id) }))
+
+  /*
+   * The server owns which chapters exist (see PUT /api/projects/{pid}). After it creates or deletes
+   * one, take its chapter list but keep local chapters, so unsaved edits survive.
+   */
+  const syncChapters = async () => {
+    const server = await getProject(projectId)
+    update((p) => ({ ...p, chapters: server.chapters.map((s) => p.chapters.find((c) => c.id === s.id) ?? s) }))
+  }
+
+  const onCreateChapter = async (title: string) => {
+    try {
+      const { id } = await createChapter(projectId, title)
+      await syncChapters()
+      openChapter(id)
+    } catch (e) {
+      toast.error(`Could not create chapter: ${(e as Error).message}`)
+    }
+  }
+
+  const onDeleteChapter = async (c: Chapter) => {
+    try {
+      await deleteChapter(projectId, c.id)
+      await syncChapters()
+      openChapter('')
+      toast.success(`Deleted "${c.title}"`)
+    } catch (e) {
+      toast.error(`Could not delete chapter: ${(e as Error).message}`)
+    }
+  }
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -152,7 +203,7 @@ export default function Workspace({ projectId }: { projectId: string }) {
     let last = ''
     for (const f of files) {
       try {
-        last = (await uploadPage(projectId, f)).name
+        last = (await uploadPage(projectId, chapterId, f)).name
       } catch (err) {
         toast.error(`${f.name}: ${(err as Error).message}`)
       }
@@ -160,11 +211,8 @@ export default function Workspace({ projectId }: { projectId: string }) {
     try {
       // The server registered the new pages. Take its page list (and order) but keep local boxes,
       // so unsaved edits survive and the next save does not overwrite the new pages.
-      const server = await getProject(projectId)
-      update((p) => ({
-        ...p,
-        pages: Object.fromEntries(Object.keys(server.pages).map((n) => [n, p.pages[n] ?? server.pages[n]])),
-      }))
+      const serverPages = (await getProject(projectId)).chapters.find((c) => c.id === chapterId)?.pages ?? {}
+      updatePages((pages) => Object.fromEntries(Object.keys(serverPages).map((n) => [n, pages[n] ?? serverPages[n]])))
       if (last) setChosenPage(last)
     } catch (err) {
       toast.error(`Could not refresh pages: ${(err as Error).message}`)
@@ -174,10 +222,10 @@ export default function Workspace({ projectId }: { projectId: string }) {
   const onExport = async () => {
     try {
       await flush()
-      const text = await exportScript(projectId)
+      const text = await exportScript(projectId, chapterId)
       const a = document.createElement('a')
       a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }))
-      a.download = `${project.title || 'script'}.md`
+      a.download = `${[project.title, chapter.title].filter(Boolean).join(' - ') || 'script'}.md`
       a.click()
       URL.revokeObjectURL(a.href)
     } catch (err) {
@@ -190,6 +238,13 @@ export default function Workspace({ projectId }: { projectId: string }) {
   return (
     <div className="flex h-screen flex-col">
       <Navbar projectId={projectId}>
+        <ChapterSwitcher
+          chapters={project.chapters}
+          value={chapterId}
+          onChange={openChapter}
+          onCreate={onCreateChapter}
+          onDelete={onDeleteChapter}
+        />
         <Select value={page} onValueChange={setChosenPage} disabled={!pageNames.length}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="No pages" />
@@ -202,10 +257,10 @@ export default function Workspace({ projectId }: { projectId: string }) {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" asChild>
+        <Button variant="outline" asChild aria-disabled={!chapter} className={cn(!chapter && 'pointer-events-none opacity-50')}>
           <label className="cursor-pointer">
             Add pages
-            <input type="file" accept="image/*" multiple hidden onChange={onUpload} />
+            <input type="file" accept="image/*" multiple hidden disabled={!chapter} onChange={onUpload} />
           </label>
         </Button>
         <Button variant="outline" disabled={!page || detecting} onClick={onDetect}>
@@ -215,15 +270,29 @@ export default function Workspace({ projectId }: { projectId: string }) {
           Sort order
         </Button>
         <span className="flex-1" />
-        <Button onClick={onExport}>Export script</Button>
+        <Button disabled={!chapter} onClick={onExport}>
+          Export script
+        </Button>
       </Navbar>
 
       <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.2fr)_minmax(360px,1fr)]">
         <section className="overflow-auto border-r p-4">
           {page ? (
-            <PageViewer projectId={projectId} page={page} boxes={boxes} selectedId={selectedId} onSelect={setSelectedId} onCreate={createBox} />
+            <PageViewer
+              projectId={projectId}
+              chapterId={chapterId}
+              page={page}
+              boxes={boxes}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onCreate={createBox}
+            />
           ) : (
-            <p className="text-muted-foreground p-6">Add a page image to start. Drag on the page to draw a box around each bubble.</p>
+            <p className="text-muted-foreground p-6">
+              {chapter
+                ? 'Add a page image to start. Drag on the page to draw a box around each bubble.'
+                : 'Add a chapter (the + next to the chapter switcher) to start adding pages.'}
+            </p>
           )}
         </section>
 
