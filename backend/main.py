@@ -1,10 +1,10 @@
 """
-manga-assist: tool for drafting and proofreading manga translations (JA -> EN).
+Scanji: tool for drafting and proofreading manga translations (JA -> EN).
 
 Run:  uvicorn backend.main:app --reload
 Config (via .env):
   ANTHROPIC_API_KEY   needed for AI drafting/proofreading
-  MANGA_ASSIST_MODEL  optional model override
+  SCANJI_MODEL  optional model override
 
 In development run `npm run dev` in frontend (it proxies /api to this server);
 for normal use run `npm run build` and this server serves frontend/dist.
@@ -29,7 +29,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="manga-assist", lifespan=lifespan)
+app = FastAPI(title="Scanji", lifespan=lifespan)
 
 for module in (projects, chapters, pages, ocr, detect, draft, export):
     app.include_router(module.router)

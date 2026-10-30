@@ -16,6 +16,6 @@ LEGACY_PAGES = DATA / "pages"
 
 PROJECTS.mkdir(parents=True, exist_ok=True)
 
-MODEL = os.environ.get("MANGA_ASSIST_MODEL", "claude-sonnet-5-5")
+MODEL = os.environ.get("SCANJI_MODEL", "claude-sonnet-5-5")
 
 DETECTOR_REPO = "ogkalu/comic-text-and-bubble-detector"  # RT-DETR model. Classes: bubble / text_bubble / text_free

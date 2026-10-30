@@ -22,7 +22,7 @@ export function Navbar({ projectId, children }: Props) {
   return (
     <header className="flex items-center gap-3 border-b px-4 py-2.5">
       <Link to="/" className="mr-2 text-base font-semibold hover:opacity-80">
-        manga-assist
+        Scanji
       </Link>
       {projectId && (
         <Select value={projectId} onValueChange={(id) => navigate(`/p/${id}`)}>
