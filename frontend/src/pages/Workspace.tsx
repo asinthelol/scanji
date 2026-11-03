@@ -9,11 +9,12 @@ import {
 } from '@dnd-kit/core'
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers'
 import { arrayMove,SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
-import { Loader2 } from 'lucide-react'
+import { BookOpen, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { BubbleCard } from '@/components/BubbleCard'
 import { ChapterSwitcher } from '@/components/ChapterSwitcher'
+import { DictionaryPanel } from '@/components/DictionaryPanel'
 import { PageViewer } from '@/components/PageViewer'
 import { ProjectSettings } from '@/components/ProjectSettings'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,7 @@ export default function Workspace({ projectId }: { projectId: string }) {
   const [chosenPage, setChosenPage] = useState('')
   const [selectedId, setSelectedId] = useState('')
   const [detecting, setDetecting] = useState(false)
+  const [dictionaryOpen, setDictionaryOpen] = useState(false)
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set())
 
   const sensors = useSensors(
@@ -270,12 +272,20 @@ export default function Workspace({ projectId }: { projectId: string }) {
           Sort order
         </Button>
         <span className="flex-1" />
+        <Button variant={dictionaryOpen ? 'secondary' : 'outline'} aria-pressed={dictionaryOpen} onClick={() => setDictionaryOpen((open) => !open)}>
+          <BookOpen /> Dictionary
+        </Button>
         <Button disabled={!chapter} onClick={onExport}>
           Export script
         </Button>
       </Navbar>
 
-      <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.2fr)_minmax(360px,1fr)]">
+      <main
+        className={cn(
+          'grid min-h-0 flex-1 grid-cols-[minmax(0,1.2fr)_minmax(360px,1fr)]',
+          dictionaryOpen && 'grid-cols-[minmax(0,1.2fr)_minmax(360px,1fr)_minmax(300px,0.8fr)]',
+        )}
+      >
         <section className="overflow-auto border-r p-4">
           {page ? (
             <PageViewer
@@ -327,6 +337,12 @@ export default function Workspace({ projectId }: { projectId: string }) {
             </SortableContext>
           </DndContext>
         </section>
+
+        {dictionaryOpen && (
+          <aside aria-label="Dictionary" className="overflow-auto border-l p-4">
+            <DictionaryPanel />
+          </aside>
+        )}
       </main>
     </div>
   )

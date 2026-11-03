@@ -1,4 +1,4 @@
-import type { Box, DraftResult, Project, ProjectSummary } from '@/types'
+import type { Box, DictionaryResult, DraftResult, Project, ProjectSummary } from '@/types'
 import { emptyProject } from '@/types'
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -92,3 +92,7 @@ export const draftBubble = (body: {
 }) => request<DraftResult>('/api/draft', json('POST', body))
 
 export const exportScript = (pid: string, cid: string) => request<string>(`${chapterUrl(pid, cid)}/export`)
+
+// ---- dictionary ----
+
+export const lookupWord = (q: string) => request<DictionaryResult>(`/api/dictionary?q=${encodeURIComponent(q)}`)
