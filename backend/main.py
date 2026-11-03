@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import FRONTEND_DIST
-from .routers import chapters, detect, draft, export, ocr, pages, projects
+from .routers import chapters, detect, dictionary, draft, export, ocr, pages, projects
 from .storage import migrate_chapters, migrate_legacy
 
 
@@ -31,7 +31,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Scanji", lifespan=lifespan)
 
-for module in (projects, chapters, pages, ocr, detect, draft, export):
+for module in (projects, chapters, pages, ocr, detect, dictionary, draft, export):
     app.include_router(module.router)
 
 

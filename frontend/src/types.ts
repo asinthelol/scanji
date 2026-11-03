@@ -55,6 +55,24 @@ export interface DraftResult {
   flags: string[]
 }
 
+export interface DictionaryEntry {
+  id: number
+  common: boolean
+  kanji: string[]
+  kana: string[]
+  senses: { pos: string[]; gloss: string[] }[]
+}
+
+export interface DictionaryResult {
+  // downloading and indexing happen once, in the background, the first time the dictionary is used
+  status: 'missing' | 'downloading' | 'indexing' | 'ready' | 'error'
+  message: string
+  entries: DictionaryEntry[]
+  // set when the word has no entry of its own. the dictionary forms of `stem`, or words starting with it
+  fallback: '' | 'inflection' | 'prefix'
+  stem: string
+}
+
 export const emptyProject = (): Project => ({
   title: '',
   export: { title_heading: '# {title} - {chapter}', page_heading: '## {page}' },

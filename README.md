@@ -48,7 +48,7 @@ Open http://127.0.0.1:8000.
 
 For frontend work, run `npm run dev` in `frontend/` as well and open http://localhost:5173 instead. It proxies `/api` to the backend.
 
-The first OCR and bubble detection run download their models (manga-ocr and an RT-DETR detector), so expect a wait the first time.
+The first OCR and bubble detection run download their models (manga-ocr and an RT-DETR detector), so expect a wait the first time. The first time you open the dictionary it downloads JMdict (about 12 MB) and indexes it into `data/dictionary/` (about 100 MB), which takes around 15 seconds. After that, lookups work offline.
 
 ## How To Use
 
@@ -60,12 +60,15 @@ The first OCR and bubble detection run download their models (manga-ocr and an R
 6. **Use** the suggestion or edit the **Final** line. Drag the grip handle to reorder bubbles, or **Sort order** to reset to reading order
 7. **Export script** downloads the chapter as a markdown file
 
+The **Dictionary** button in the navbar opens a lookup panel beside the cards. Search by Japanese, reading, or English. Conjugated forms like 食べた find their dictionary form.
+
 ## Features
 
 - Bubble detection with a manga-specific model, plus manually-drawn boxes
 - Reading-order sorting (right-to-left, top-to-bottom) and drag-to-reorder
 - OCR with manga-ocr, running locally (takes ~10s to load on first detect)
 - Drafting and proofreading through the Anthropic API that respects your glossary, series context, and the surrounding bubbles
+- Offline JMdict dictionary panel, with fallbacks for conjugated words
 - Projects with chapters; the glossary and context are shared across a project's chapters
 - Plain-line script export with customizable headings (`{title}`, `{chapter}`, `{page}`)
 - Autosave to disk
@@ -100,7 +103,8 @@ pytest
 
 ## Built With
 
-- **Backend**: FastAPI, Pillow, manga-ocr, Hugging Face Transformers (RT-DETR detector)
+- **Backend**: FastAPI, Pillow, manga-ocr, Hugging Face Transformers (RT-DETR detector), SQLite
+- **Dictionary data**: [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) via [jmdict-simplified](https://github.com/scriptin/jmdict-simplified)
 - **Frontend**: React, TypeScript, Vite, Tailwind, shadcn/ui, dnd-kit
 - **Drafting**: Anthropic API
 
