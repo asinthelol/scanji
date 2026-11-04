@@ -1,6 +1,7 @@
 """Anthropic client and the draft/check prompt."""
 import json
 import os
+import re
 
 from fastapi import HTTPException
 
@@ -9,14 +10,16 @@ from ..schemas import DraftReq
 
 _client = None
 
+MAX_TOKENS = 2500  # a reply cut off by this limit is invalid JSON; see salvage()
+
 SYSTEM = """
 You are a Japanese-to-English manga translation assistant for a translator.
 You see one speech bubble at a time, plus nearby bubbles for context.
 Return ONLY a JSON object with keys:
   "literal": a faithful, word-for-word-ish gloss (keep it clunky; this is for checking meaning),
   "suggestion": natural, concise English suited to a speech bubble (match the speaker's tone),
-  "notes": short notes on nuance, honorifics, wordplay, ambiguity, or anything the translator should double-check,
-  "flags": a list of problems in the translator's draft if one was provided (mistranslation, omitted meaning, too literal, tone mismatch, typo/grammar), or an empty list if none or no draft.
+  "notes": short notes on nuance, honorifics, wordplay, ambiguity, or anything the translator should double-check (at most about 60 words),
+  "flags": a list of problems in the translator's draft if one was provided (mistranslation, omitted meaning, too literal, tone mismatch, typo/grammar), one short sentence each, or an empty list if none or no draft.
 Respect the glossary exactly. Do not invent context you cannot see; say so in notes if the line is ambiguous.
 """
 
@@ -47,9 +50,31 @@ def build_prompt(req: DraftReq) -> str:
     )
 
 
+_STRING = r'"((?:[^"\\]|\\.)*)"'  # a complete JSON string; a cut-off one has no closing quote
+
+
+def salvage(text: str) -> dict | None:
+    """
+    Recover the fields that finished from a reply cut off mid-JSON (token limit). None if there is
+    no complete suggestion to show.
+    """
+    data: dict = {}
+    for key in ("literal", "suggestion", "notes"):
+        m = re.search(rf'(?<!\\)"{key}"\s*:\s*{_STRING}', text)
+        if m:
+            data[key] = json.loads(f'"{m.group(1)}"')
+    if not data.get("suggestion"):
+        return None
+    flags = re.search(r'(?<!\\)"flags"\s*:\s*\[', text)
+    if flags:
+        data["flags"] = [json.loads(f'"{s}"') for s in re.findall(_STRING, text[flags.end():])]
+    data["notes"] = f"{data.get('notes', '')} [The reply was cut off, so this may be incomplete.]".strip()
+    return data
+
+
 def parse_reply(text: str) -> dict:
     """
-    Parse the model's JSON reply, tolerating code fences and surrounding prose.
+    Parse the model's JSON reply, tolerating code fences, surrounding prose and a cut-off ending.
     """
     start, end = text.find("{"), text.rfind("}")
     data = None
@@ -58,6 +83,8 @@ def parse_reply(text: str) -> dict:
             data = json.loads(text[start:end + 1])
         except json.JSONDecodeError:
             pass
+    if not isinstance(data, dict):
+        data = salvage(text)
     if not isinstance(data, dict):
         return {"literal": "", "suggestion": text, "notes": "model returned non-JSON", "flags": []}
 
@@ -80,7 +107,7 @@ def draft(req: DraftReq) -> dict:
     try:
         msg = get_client().messages.create(
             model=MODEL,
-            max_tokens=1000,
+            max_tokens=MAX_TOKENS,
             system=SYSTEM,
             messages=[{"role": "user", "content": build_prompt(req)}],
         )
