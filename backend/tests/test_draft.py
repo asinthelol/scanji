@@ -158,3 +158,50 @@ def test_parse_falls_back_on_anything_unusable(text):
 def test_build_prompt_handles_glossary_without_notes():
     prompt = llm.build_prompt(DraftReq(ja="x", glossary=[{"ja": "a", "en": "b"}]))
     assert "- a = b\n" in prompt and "()" not in prompt
+
+
+# ---- replies cut off by the token limit ----
+
+CUT_IN_FLAGS = (
+    '```json\n{"literal": "word for word", "suggestion": "Good morning", "notes": "casual, \\"quoted\\" bit", '
+    '"flags": ["tone mismatch", "omits the \\"honorific\\"", "a flag that never fini'
+)
+
+
+def test_cut_off_in_the_flags_keeps_everything_that_finished():
+    out = llm.parse_reply(CUT_IN_FLAGS)
+    assert out["literal"] == "word for word"
+    assert out["suggestion"] == "Good morning"
+    assert out["notes"].startswith('casual, "quoted" bit')  # escapes are decoded
+    assert out["notes"].endswith("[The reply was cut off, so this may be incomplete.]")
+    assert out["flags"] == ["tone mismatch", 'omits the "honorific"']  # the unfinished flag is dropped
+
+
+def test_cut_off_in_the_notes_keeps_literal_and_suggestion():
+    out = llm.parse_reply('{"literal": "word for word", "suggestion": "Good morning", "notes": "this goes on and on')
+    assert (out["literal"], out["suggestion"]) == ("word for word", "Good morning")
+    assert out["notes"] == "[The reply was cut off, so this may be incomplete.]"
+    assert out["flags"] == []
+
+
+def test_cut_off_before_the_suggestion_falls_back_to_plain_text():
+    text = '{"literal": "word for word", "suggestion": "Good mor'
+    out = llm.parse_reply(text)
+    assert out["notes"] == "model returned non-JSON" and out["suggestion"] == text
+
+
+def test_keys_inside_a_notes_string_are_not_mistaken_for_fields():
+    text = '{"literal": "x", "suggestion": "real", "notes": "he said \\"suggestion\\": \\"fake\\" and then"'
+    assert llm.parse_reply(text)["suggestion"] == "real"
+
+
+def test_cut_off_reply_still_renders_through_the_route(client, fake):
+    fake(reply=CUT_IN_FLAGS)
+    body = client.post("/api/draft", json={"ja": "おはよう"}).json()
+    assert body["suggestion"] == "Good morning" and body["flags"][0] == "tone mismatch"
+
+
+def test_the_reply_budget_leaves_room_for_long_notes(client, fake):
+    sdk = fake()
+    client.post("/api/draft", json={"ja": "おはよう"})
+    assert sdk.calls[0]["max_tokens"] >= 2000
